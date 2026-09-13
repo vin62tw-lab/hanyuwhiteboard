@@ -1,0 +1,6 @@
+{
+  "name": "華語教學互動白板",
+  "description": "專為中文教師與學生設計的課堂互動白板，行動裝置與平板友善，支援即時打字、注音/拼音標注、多音字修正、筆順動畫、自由書寫劃線、教育部/TOCFL/TBCL/HSK字典查詢及多格式匯出。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
