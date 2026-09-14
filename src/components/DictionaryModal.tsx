@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Search, Volume2, PlusCircle, Book, Award, Layers, Sparkles, Loader2, BookmarkCheck } from 'lucide-react';
 import { DictionaryData, RegionalStandard, ScriptType } from '../types';
+import { getOfflineDictionaryData } from '../utils/dictionaryFallback';
 
 interface DictionaryModalProps {
   initialQuery?: string;
@@ -39,15 +40,19 @@ export const DictionaryModal: React.FC<DictionaryModalProps> = ({
         body: JSON.stringify({ query: q, standard, script }),
       });
 
-      if (!res.ok) {
-        throw new Error('辭典連線查詢失敗，請稍候重試');
+      if (res.ok) {
+        const data: DictionaryData = await res.json();
+        setResult(data);
+        return;
       }
-
-      const data: DictionaryData = await res.json();
-      setResult(data);
+      // If server responded with error (e.g. 404 on static hosting or 429 quota), use offline data
+      const fallback = getOfflineDictionaryData(q, standard, script);
+      setResult(fallback);
     } catch (err: any) {
-      console.error('Dictionary search error:', err);
-      setErrorMsg(err.message || '查詢時發生錯誤');
+      console.warn('Backend dictionary lookup unavailable, using local dictionary generator:', err);
+      // Seamlessly fallback to offline local dictionary
+      const fallback = getOfflineDictionaryData(q, standard, script);
+      setResult(fallback);
     } finally {
       setLoading(false);
     }
