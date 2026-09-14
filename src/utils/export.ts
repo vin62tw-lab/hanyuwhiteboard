@@ -79,7 +79,7 @@ export async function copyCanvasImageToClipboard(element: HTMLElement): Promise<
     const canvas = await html2canvas(element, {
       scale: 2,
       useCORS: true,
-      backgroundColor: '#ffffff',
+      backgroundColor: '#fbfbfa',
     });
     return new Promise((resolve) => {
       canvas.toBlob(async (blob) => {
@@ -178,11 +178,14 @@ export function exportToGoogleDocsDoc(blocks: TextBlockItem[], displayMode: Phon
 }
 
 // Export to PNG Image
-export async function exportToPng(element: HTMLElement, filename: string = '華語教學白板'): Promise<void> {
+export async function exportToPng(
+  element: HTMLElement,
+  filename: string = '華語教學白板'
+): Promise<void> {
   const canvas = await html2canvas(element, {
     scale: 2,
     useCORS: true,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fbfbfa',
   });
   const dataUrl = canvas.toDataURL('image/png');
   const link = document.createElement('a');
@@ -194,11 +197,14 @@ export async function exportToPng(element: HTMLElement, filename: string = '華�
 }
 
 // Export to PDF
-export async function exportToPdf(element: HTMLElement, title: string = '華語教學白板課堂筆記'): Promise<void> {
+export async function exportToPdf(
+  element: HTMLElement,
+  title: string = '華語教學白板課堂筆記'
+): Promise<void> {
   const canvas = await html2canvas(element, {
     scale: 2,
     useCORS: true,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fbfbfa',
   });
 
   const imgData = canvas.toDataURL('image/png');

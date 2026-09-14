@@ -22,6 +22,7 @@ interface TextBlockViewProps {
   onOpenPronunciation: (charData: CharacterPhonetic, blockId: string, charIndex: number) => void;
   onOpenStrokeOrder: (char: string) => void;
   onDragStart: (e: React.MouseEvent | React.PointerEvent, blockId: string) => void;
+  isDragging?: boolean;
 }
 
 export const TextBlockView: React.FC<TextBlockViewProps> = ({
@@ -34,10 +35,11 @@ export const TextBlockView: React.FC<TextBlockViewProps> = ({
   onOpenPronunciation,
   onOpenStrokeOrder,
   onDragStart,
+  isDragging = false,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(block.rawText);
-  const [showStylePanel, setShowStylePanel] = useState(false);
+  const charPointerStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const handleTextSubmit = () => {
     if (editText.trim() !== block.rawText) {
@@ -59,17 +61,46 @@ export const TextBlockView: React.FC<TextBlockViewProps> = ({
         e.stopPropagation();
         onSelect();
       }}
+      onPointerDown={(e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('button, select, input, textarea, .char-interactive-span')) {
+          return;
+        }
+        e.stopPropagation();
+        onSelect();
+        onDragStart(e, block.id);
+      }}
       style={{
         position: 'absolute',
         left: `${block.x}px`,
         top: `${block.y}px`,
       }}
-      className={`group select-none cursor-default transition-shadow rounded-2xl ${
-        isSelected
-          ? 'ring-2 ring-indigo-500/70 shadow-lg bg-white/60 backdrop-blur-xs'
-          : 'hover:ring-1 hover:ring-stone-300'
+      className={`group select-none rounded-2xl transition-shadow ${
+        isDragging
+          ? 'ring-2 ring-indigo-500 shadow-2xl scale-[1.01] bg-white/95 z-50 cursor-grabbing'
+          : isSelected
+          ? 'ring-2 ring-indigo-500/80 shadow-xl bg-white/90 backdrop-blur-xs z-30 cursor-grab'
+          : 'hover:ring-1 hover:ring-indigo-300/80 hover:shadow-md bg-white/60 hover:bg-white/80 z-20 cursor-grab'
       }`}
     >
+      {/* Top Drag Handle Header - Always visible for effortless moving */}
+      <div
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          onSelect();
+          onDragStart(e, block.id);
+        }}
+        title="按住此處拖曳文字框到白板任意位置"
+        className="w-full flex items-center justify-between px-2.5 py-1 bg-stone-100/90 hover:bg-indigo-50/90 border-b border-stone-200/80 rounded-t-2xl cursor-grab active:cursor-grabbing touch-none select-none transition-colors"
+      >
+        <div className="flex items-center gap-1.5 text-[11px] text-stone-600 font-semibold">
+          <GripHorizontal className="w-3.5 h-3.5 text-stone-400 group-hover:text-indigo-600 transition-colors" />
+          <span className="text-[10px] sm:text-[11px]">按住拖曳位置</span>
+        </div>
+        <div className="flex items-center gap-2 text-[10px] text-stone-400 font-mono">
+          <span>{block.fontSize}px</span>
+        </div>
+      </div>
       {/* Top Floating Control Bar when Selected */}
       {isSelected && (
         <div
@@ -257,11 +288,39 @@ export const TextBlockView: React.FC<TextBlockViewProps> = ({
 
                 {/* 2. Character & Right-side Vertical Zhuyin Layout */}
                 <div className="flex items-center">
-                  {/* Chinese Character */}
+                  {/* Chinese Character with Drag or Pronunciation Click Detection */}
                   <span
-                    onClick={(e) => {
+                    onPointerDown={(e) => {
                       e.stopPropagation();
-                      onOpenPronunciation(ch, block.id, idx);
+                      onSelect();
+                      charPointerStartRef.current = { x: e.clientX, y: e.clientY };
+                      let hasMoved = false;
+
+                      const handleMove = (moveEv: PointerEvent) => {
+                        if (!charPointerStartRef.current) return;
+                        const dist = Math.hypot(
+                          moveEv.clientX - charPointerStartRef.current.x,
+                          moveEv.clientY - charPointerStartRef.current.y
+                        );
+                        if (dist > 5) {
+                          hasMoved = true;
+                          window.removeEventListener('pointermove', handleMove);
+                          window.removeEventListener('pointerup', handleUp);
+                          onDragStart(e, block.id);
+                        }
+                      };
+
+                      const handleUp = () => {
+                        window.removeEventListener('pointermove', handleMove);
+                        window.removeEventListener('pointerup', handleUp);
+                        if (!hasMoved) {
+                          onOpenPronunciation(ch, block.id, idx);
+                        }
+                        charPointerStartRef.current = null;
+                      };
+
+                      window.addEventListener('pointermove', handleMove);
+                      window.addEventListener('pointerup', handleUp, { once: true });
                     }}
                     style={{
                       fontSize: `${block.fontSize}px`,
@@ -269,7 +328,7 @@ export const TextBlockView: React.FC<TextBlockViewProps> = ({
                       color: block.textColor || '#1e293b',
                       lineHeight: 1.15,
                     }}
-                    className="cursor-pointer hover:opacity-85 transition-opacity relative z-10 font-medium select-none"
+                    className="char-interactive-span cursor-grab active:cursor-grabbing hover:opacity-85 transition-opacity relative z-10 font-medium select-none"
                   >
                     {ch.char}
                   </span>

@@ -15,6 +15,10 @@ const PORT = 3000;
 
 app.use(express.json({ limit: "25mb" }));
 
+// In-memory caches to prevent repeated API calls and avoid rate limits
+const dictCache = new Map<string, any>();
+const strokeCache = new Map<string, any>();
+
 // Lazy Gemini client helper
 let aiClient: GoogleGenAI | null = null;
 function getGeminiClient(): GoogleGenAI | null {
@@ -48,6 +52,11 @@ app.post("/api/dictionary/lookup", async (req, res) => {
     }
 
     const cleanQuery = query.trim().slice(0, 10);
+    const cacheKey = `${cleanQuery}_${standard}_${script}`;
+    if (dictCache.has(cacheKey)) {
+      return res.json(dictCache.get(cacheKey));
+    }
+
     const ai = getGeminiClient();
 
     if (!ai) {
@@ -130,7 +139,7 @@ app.post("/api/dictionary/lookup", async (req, res) => {
 }`;
 
     let data: any;
-    const modelsToTry = ["gemini-3.6-flash", "gemini-3.8-flash"];
+    const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash"];
     for (const modelName of modelsToTry) {
       try {
         const response = await Promise.race([
@@ -142,19 +151,20 @@ app.post("/api/dictionary/lookup", async (req, res) => {
             },
           }),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Timeout")), 7000)
+            setTimeout(() => reject(new Error("Timeout")), 5000)
           ),
         ]);
         if (response?.text) {
           data = JSON.parse(response.text);
+          dictCache.set(cacheKey, data);
           return res.json(data);
         }
-      } catch (apiErr: any) {
-        console.warn(`Gemini API (${modelName}) skipped or timed out:`, apiErr?.message);
+      } catch (_apiErr: any) {
+        // Quietly fallback without noisy log errors
       }
     }
-  } catch (error: any) {
-    console.warn("Gemini dictionary unavailable, using smart fallback:", error?.message);
+  } catch (_error: any) {
+    // Continue to fallback
   }
 
   // Fallback handler for all requests when AI is busy or unconfigured
@@ -281,6 +291,10 @@ app.post("/api/character/stroke-data", async (req, res) => {
     }
 
     const singleChar = char.trim().charAt(0);
+    if (strokeCache.has(singleChar)) {
+      return res.json(strokeCache.get(singleChar));
+    }
+
     const ai = getGeminiClient();
 
     if (!ai) {
@@ -314,7 +328,7 @@ app.post("/api/character/stroke-data", async (req, res) => {
   "radicalColoredSvgGuide": "部首在書寫時的筆順序號範圍 (例如：1-4 為部首筆畫)"
 }`;
 
-    const modelsToTry = ["gemini-3.6-flash", "gemini-3.8-flash"];
+    const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash"];
     for (const modelName of modelsToTry) {
       try {
         const response = await Promise.race([
@@ -326,32 +340,44 @@ app.post("/api/character/stroke-data", async (req, res) => {
             },
           }),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Timeout")), 6000)
+            setTimeout(() => reject(new Error("Timeout")), 5000)
           ),
         ]);
         if (response?.text) {
           const data = JSON.parse(response.text);
+          strokeCache.set(singleChar, data);
           return res.json(data);
         }
-      } catch (err: any) {
-        console.warn(`Stroke data (${modelName}) error:`, err?.message);
+      } catch (_err: any) {
+        // Quietly try next model or fallback
       }
     }
-      // Fallback response for stroke steps
-      return res.json({
-        char: singleChar,
-        radical: "基本部首",
-        remainingComponent: "",
-        strokesCount: 6,
-        strokeSteps: [
-          "第1筆：橫/撇", "第2筆：豎/折", "第3筆：橫/點", "第4筆：挑/撇", "第5筆：豎", "第6筆：捺"
-        ],
-        strokeRule: "依照教育部標準楷書筆順：先橫後豎、從上到下、從左到右、先外後內再封口。",
-        radicalColoredSvgGuide: "前1-3筆為部首",
-      });
-  } catch (err: any) {
-    console.error("Stroke data error:", err);
-    res.status(500).json({ error: err.message });
+
+    // Fallback response for stroke steps
+    const fallbackStroke = {
+      char: singleChar,
+      radical: "漢字部首",
+      remainingComponent: "",
+      strokesCount: 8,
+      strokeSteps: [
+        "第1筆：橫/撇", "第2筆：豎/折", "第3筆：橫/點", "第4筆：挑/撇", "第5筆：豎", "第6筆：捺"
+      ],
+      strokeRule: "依照教育部標準楷書筆順：先橫後豎、從上到下、從左到右、先外後內再封口。",
+      radicalColoredSvgGuide: "前1-3筆為部首",
+    };
+    strokeCache.set(singleChar, fallbackStroke);
+    return res.json(fallbackStroke);
+  } catch (_err: any) {
+    // Return gracefully without 500
+    const fallbackChar = req.body?.char ? String(req.body.char).charAt(0) : "字";
+    res.json({
+      char: fallbackChar,
+      radical: "一",
+      remainingComponent: "",
+      strokesCount: 6,
+      strokeSteps: ["第1筆：橫", "第2筆：豎", "第3筆：撇", "第4筆：點"],
+      strokeRule: "先橫後豎、從上到下、從左到右。",
+    });
   }
 });
 

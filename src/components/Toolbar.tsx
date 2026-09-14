@@ -5,7 +5,6 @@ import {
   Highlighter,
   Type,
   Eraser,
-  Grid,
   Palette,
   RotateCcw,
   RotateCw,
@@ -13,9 +12,7 @@ import {
   Sparkles,
   Search,
   Download,
-  Eye,
   Crosshair,
-  Volume2
 } from 'lucide-react';
 import { ToolType, BackgroundGridType } from '../types';
 
@@ -200,12 +197,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           { type: 'tianzige' as BackgroundGridType, label: '田字格' },
           { type: 'mizige' as BackgroundGridType, label: '米字格' },
           { type: 'lines' as BackgroundGridType, label: '橫線' },
-          { type: 'blank' as BackgroundGridType, label: '純白' },
+          { type: 'blank' as BackgroundGridType, label: '空白' },
         ].map((g) => (
           <button
             key={g.type}
             onClick={() => onSelectGridType(g.type)}
-            className={`px-2 py-1 rounded-lg text-[11px] font-medium transition-colors whitespace-nowrap ${
+            className={`px-2 py-1 rounded-lg text-[11px] font-medium transition-colors whitespace-nowrap cursor-pointer ${
               gridType === g.type
                 ? 'bg-stone-700 text-white font-bold'
                 : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'

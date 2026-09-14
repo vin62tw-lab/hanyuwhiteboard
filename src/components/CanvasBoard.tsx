@@ -1,5 +1,12 @@
 import React, { useRef, useEffect, useState } from 'react';
 import {
+  Plus,
+  ArrowUp,
+  RotateCcw,
+  Maximize2,
+  ArrowRight,
+} from 'lucide-react';
+import {
   ToolType,
   BackgroundGridType,
   DrawingStroke,
@@ -47,14 +54,50 @@ export const CanvasBoard: React.FC<CanvasBoardProps> = ({
   boardRef,
   onQuickAddTextAt,
 }) => {
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const currentPointsRef = useRef<DrawingPoint[]>([]);
   const [laserPos, setLaserPos] = useState<{ x: number; y: number } | null>(null);
 
+  // Whiteboard expandable space state
+  const [boardExtraWidth, setBoardExtraWidth] = useState(0);
+  const [boardExtraHeight, setBoardExtraHeight] = useState(0);
+  const [viewportSize, setViewportSize] = useState({ width: 1200, height: 800 });
+
   // Dragging state for text blocks
   const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null);
   const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Measure viewport size of outer scroll container
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const updateSize = () => {
+      const rect = container.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        setViewportSize({ width: Math.round(rect.width), height: Math.round(rect.height) });
+      }
+    };
+
+    updateSize();
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          setViewportSize({ width: Math.round(width), height: Math.round(height) });
+        }
+      }
+    });
+
+    resizeObserver.observe(container);
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  const totalWidth = Math.max(viewportSize.width, 900) + boardExtraWidth;
+  const totalHeight = Math.max(viewportSize.height, 600) + boardExtraHeight;
 
   // Render all committed strokes to the HTML5 canvas
   const redrawCanvas = () => {
@@ -92,24 +135,14 @@ export const CanvasBoard: React.FC<CanvasBoardProps> = ({
     }
   };
 
-  // Resize canvas to match container size
+  // Resize canvas when board total dimensions change
   useEffect(() => {
     const canvas = canvasRef.current;
-    const container = boardRef.current;
-    if (!canvas || !container) return;
-
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        canvas.width = width;
-        canvas.height = height;
-        redrawCanvas();
-      }
-    });
-
-    resizeObserver.observe(container);
-    return () => resizeObserver.disconnect();
-  }, []);
+    if (!canvas) return;
+    canvas.width = totalWidth;
+    canvas.height = totalHeight;
+    redrawCanvas();
+  }, [totalWidth, totalHeight]);
 
   // Redraw whenever strokes change
   useEffect(() => {
@@ -122,8 +155,8 @@ export const CanvasBoard: React.FC<CanvasBoardProps> = ({
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: Math.round(e.clientX - rect.left),
+      y: Math.round(e.clientY - rect.top),
       pressure: e.pressure || 0.5,
     };
   };
@@ -174,8 +207,8 @@ export const CanvasBoard: React.FC<CanvasBoardProps> = ({
       ctx.beginPath();
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.lineWidth = strokeWidth;
-      ctx.strokeStyle = color;
+      ctx.lineWidth = tool === 'eraser' ? strokeWidth * 3 : strokeWidth;
+      ctx.strokeStyle = tool === 'eraser' ? '#fbfbfa' : color;
       ctx.globalAlpha = tool === 'highlighter' ? 0.35 : 1.0;
 
       const p1 = pts[pts.length - 2];
@@ -202,7 +235,7 @@ export const CanvasBoard: React.FC<CanvasBoardProps> = ({
         type: 'stroke',
         tool: tool === 'highlighter' ? 'highlighter' : 'pen',
         points: [...currentPointsRef.current],
-        color: tool === 'eraser' ? '#ffffff' : color,
+        color: tool === 'eraser' ? '#fbfbfa' : color,
         width: tool === 'eraser' ? strokeWidth * 3 : strokeWidth,
         opacity: tool === 'highlighter' ? 0.35 : 1.0,
       };
@@ -211,147 +244,323 @@ export const CanvasBoard: React.FC<CanvasBoardProps> = ({
     currentPointsRef.current = [];
   };
 
-  // Dragging logic for TextBlockView (mouse & touch/pointer)
+  // Dragging logic for TextBlockView (mouse, touch & pen)
   const handleDragStart = (e: React.MouseEvent | React.PointerEvent, blockId: string) => {
     const block = textBlocks.find((b) => b.id === blockId);
     if (!block) return;
+    onSelectBlock(blockId);
     setDraggingBlockId(blockId);
+
+    const board = boardRef.current;
+    const rect = board ? board.getBoundingClientRect() : { left: 0, top: 0 };
+    const pointerX = e.clientX - rect.left;
+    const pointerY = e.clientY - rect.top;
+
     dragOffsetRef.current = {
-      x: e.clientX - block.x,
-      y: e.clientY - block.y,
+      x: pointerX - block.x,
+      y: pointerY - block.y,
     };
   };
 
-  const handleContainerPointerMove = (e: React.PointerEvent) => {
+  // Global window listeners for butter-smooth dragging
+  useEffect(() => {
     if (!draggingBlockId) return;
-    const block = textBlocks.find((b) => b.id === draggingBlockId);
-    if (!block) return;
 
-    const newX = Math.max(10, e.clientX - dragOffsetRef.current.x);
-    const newY = Math.max(10, e.clientY - dragOffsetRef.current.y);
-    onUpdateBlock({
-      ...block,
-      x: newX,
-      y: newY,
-    });
-  };
+    const onGlobalPointerMove = (e: PointerEvent) => {
+      const block = textBlocks.find((b) => b.id === draggingBlockId);
+      if (!block) return;
 
-  const handleContainerPointerUp = () => {
-    if (draggingBlockId) {
+      const board = boardRef.current;
+      const rect = board ? board.getBoundingClientRect() : { left: 0, top: 0 };
+
+      const pointerX = e.clientX - rect.left;
+      const pointerY = e.clientY - rect.top;
+
+      const newX = Math.max(10, Math.min(totalWidth - 60, Math.round(pointerX - dragOffsetRef.current.x)));
+      const newY = Math.max(10, Math.min(totalHeight - 60, Math.round(pointerY - dragOffsetRef.current.y)));
+
+      onUpdateBlock({
+        ...block,
+        x: newX,
+        y: newY,
+      });
+    };
+
+    const onGlobalPointerUp = () => {
       setDraggingBlockId(null);
+    };
+
+    window.addEventListener('pointermove', onGlobalPointerMove);
+    window.addEventListener('pointerup', onGlobalPointerUp);
+    window.addEventListener('pointercancel', onGlobalPointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', onGlobalPointerMove);
+      window.removeEventListener('pointerup', onGlobalPointerUp);
+      window.removeEventListener('pointercancel', onGlobalPointerUp);
+    };
+  }, [draggingBlockId, textBlocks, onUpdateBlock, totalWidth, totalHeight, boardRef]);
+
+  // Space extension actions
+  const handleAddSpace = (direction: 'vertical' | 'horizontal', amount = 800) => {
+    if (direction === 'vertical') {
+      setBoardExtraHeight((prev) => prev + amount);
+      setTimeout(() => {
+        scrollContainerRef.current?.scrollBy({ top: 350, behavior: 'smooth' });
+      }, 80);
+    } else {
+      setBoardExtraWidth((prev) => prev + amount);
+      setTimeout(() => {
+        scrollContainerRef.current?.scrollBy({ left: 350, behavior: 'smooth' });
+      }, 80);
     }
   };
 
-  // Background Grid CSS pattern generator
-  const getGridBackgroundClass = () => {
-    switch (gridType) {
-      case 'tianzige':
-        return 'bg-tianzige-pattern';
-      case 'mizige':
-        return 'bg-mizige-pattern';
-      case 'lines':
-        return 'bg-lines-pattern';
-      case 'dots':
-        return 'bg-dots-pattern';
-      default:
-        return 'bg-white';
-    }
+  const handleResetSpace = () => {
+    setBoardExtraWidth(0);
+    setBoardExtraHeight(0);
+    scrollContainerRef.current?.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+  };
+
+  const handleScrollToTop = () => {
+    scrollContainerRef.current?.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
   };
 
   return (
     <div
-      ref={boardRef}
-      onPointerMove={handleContainerPointerMove}
-      onPointerUp={handleContainerPointerUp}
-      onPointerCancel={handleContainerPointerUp}
-      onDoubleClick={(e) => {
-        const rect = boardRef.current?.getBoundingClientRect();
-        if (rect) {
-          onQuickAddTextAt(e.clientX - rect.left, e.clientY - rect.top);
-        }
-      }}
-      className={`relative w-full h-full overflow-hidden select-none touch-none ${getGridBackgroundClass()}`}
-      style={{
-        backgroundColor: '#fbfbfa',
-      }}
+      ref={scrollContainerRef}
+      className="relative w-full h-full overflow-auto scroll-smooth select-none bg-stone-100"
     >
-      {/* Visual Tianzige SVG Background overlay if selected */}
-      {gridType === 'tianzige' && (
+      {/* Floating Whiteboard Space Controller Widget (Top-Right) */}
+      <div
+        className="sticky top-3 float-right mr-4 z-40 flex items-center gap-1.5 px-3 py-1.5 rounded-xl shadow-lg border text-xs transition-colors backdrop-blur-md bg-white/95 text-stone-700 border-stone-200/90"
+      >
         <div
-          className="absolute inset-0 pointer-events-none opacity-40"
-          style={{
-            backgroundImage: `
-              linear-gradient(to right, #f87171 1px, transparent 1px),
-              linear-gradient(to bottom, #f87171 1px, transparent 1px),
-              linear-gradient(to right, rgba(248, 113, 113, 0.4) 1px, transparent 1px),
-              linear-gradient(to bottom, rgba(248, 113, 113, 0.4) 1px, transparent 1px)
-            `,
-            backgroundSize: '120px 120px, 120px 120px, 60px 60px, 60px 60px',
-          }}
-        />
-      )}
+          className="flex items-center gap-1.5 font-medium pr-1.5 border-r border-stone-200 text-stone-700"
+        >
+          <Maximize2 className="w-3.5 h-3.5 text-indigo-600" />
+          <span className="font-semibold text-[11px]">白板空間</span>
+          {boardExtraHeight > 0 && (
+            <span
+              className="px-1.5 py-0.5 font-bold rounded text-[10px] bg-indigo-50 text-indigo-700"
+            >
+              +{boardExtraHeight}px
+            </span>
+          )}
+          {boardExtraWidth > 0 && (
+            <span
+              className="px-1.5 py-0.5 font-bold rounded text-[10px] bg-emerald-50 text-emerald-700"
+            >
+              寬+{boardExtraWidth}px
+            </span>
+          )}
+        </div>
 
-      {gridType === 'mizige' && (
+        <button
+          type="button"
+          onClick={() => handleAddSpace('vertical', 800)}
+          className="px-2 py-1 font-semibold rounded-lg transition-colors flex items-center gap-1 text-[11px] cursor-pointer bg-stone-100 hover:bg-indigo-50 hover:text-indigo-600 text-stone-700"
+          title="增加下方畫布高度 (+800px)"
+        >
+          <Plus className="w-3.5 h-3.5 text-indigo-500" />
+          <span>加長空間</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleAddSpace('horizontal', 800)}
+          className="px-2 py-1 font-semibold rounded-lg transition-colors flex items-center gap-1 text-[11px] cursor-pointer bg-stone-100 hover:bg-indigo-50 hover:text-indigo-600 text-stone-700"
+          title="增加右方畫布寬度 (+800px)"
+        >
+          <Plus className="w-3.5 h-3.5 text-indigo-500" />
+          <span>加寬空間</span>
+        </button>
+
+        {(boardExtraHeight > 0 || boardExtraWidth > 0) && (
+          <>
+            <button
+              type="button"
+              onClick={handleScrollToTop}
+              className="p-1 rounded-lg transition-colors cursor-pointer hover:bg-stone-100 text-stone-500 hover:text-stone-800"
+              title="回到白板起點頂部"
+            >
+              <ArrowUp className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleResetSpace}
+              className="p-1 hover:bg-stone-100 rounded-lg text-stone-400 hover:text-rose-600 transition-colors cursor-pointer"
+              title="重設為原始視窗大小"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Expandable Whiteboard Inner Stage */}
+      <div
+        ref={boardRef}
+        onDoubleClick={(e) => {
+          const rect = boardRef.current?.getBoundingClientRect();
+          if (rect) {
+            onQuickAddTextAt(
+              Math.round(e.clientX - rect.left),
+              Math.round(e.clientY - rect.top)
+            );
+          }
+        }}
+        style={{
+          width: `${totalWidth}px`,
+          height: `${totalHeight}px`,
+          backgroundColor: '#fbfbfa',
+        }}
+        className="relative transition-[width,height] duration-200 select-none touch-none shadow-xs"
+      >
+        {/* Visual Tianzige Background overlay if selected */}
+        {gridType === 'tianzige' && (
+          <div
+            className="absolute inset-0 pointer-events-none opacity-40"
+            style={{
+              backgroundImage: `
+                linear-gradient(to right, #f87171 1px, transparent 1px),
+                linear-gradient(to bottom, #f87171 1px, transparent 1px),
+                linear-gradient(to right, rgba(248, 113, 113, 0.4) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(248, 113, 113, 0.4) 1px, transparent 1px)
+              `,
+              backgroundSize: '120px 120px, 120px 120px, 60px 60px, 60px 60px',
+            }}
+          />
+        )}
+
+        {/* Visual Mizige Background overlay if selected */}
+        {gridType === 'mizige' && (
+          <div
+            className="absolute inset-0 pointer-events-none opacity-30"
+            style={{
+              backgroundImage: `
+                radial-gradient(circle, #ef4444 1px, transparent 1px),
+                linear-gradient(to right, #f87171 1px, transparent 1px),
+                linear-gradient(to bottom, #f87171 1px, transparent 1px)
+              `,
+              backgroundSize: '30px 30px, 120px 120px, 120px 120px',
+            }}
+          />
+        )}
+
+        {/* Visual Lines overlay if selected */}
+        {gridType === 'lines' && (
+          <div
+            className="absolute inset-0 pointer-events-none opacity-40"
+            style={{
+              backgroundImage: 'linear-gradient(to bottom, #cbd5e1 1px, transparent 1px)',
+              backgroundSize: '100% 48px',
+            }}
+          />
+        )}
+
+        {/* Visual Dots overlay if selected */}
+        {gridType === 'dots' && (
+          <div
+            className="absolute inset-0 pointer-events-none opacity-40"
+            style={{
+              backgroundImage: 'radial-gradient(circle, #94a3b8 1.5px, transparent 1.5px)',
+              backgroundSize: '32px 32px',
+            }}
+          />
+        )}
+
+        {/* HTML5 Canvas for Freehand Drawing */}
+        <canvas
+          ref={canvasRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          className="absolute inset-0 w-full h-full z-10 cursor-crosshair"
+        />
+
+        {/* Laser pointer beacon */}
+        {laserPos && (
+          <div
+            style={{
+              left: `${laserPos.x - 8}px`,
+              top: `${laserPos.y - 8}px`,
+            }}
+            className="absolute z-40 w-4 h-4 rounded-full bg-red-600 ring-4 ring-red-400/60 shadow-[0_0_15px_#dc2626] pointer-events-none transition-transform animate-ping"
+          />
+        )}
+
+        {/* Text Blocks Layer */}
+        <div className="absolute inset-0 z-20 pointer-events-none">
+          {textBlocks.map((block) => (
+            <div key={block.id} className="pointer-events-auto">
+              <TextBlockView
+                block={block}
+                isSelected={selectedBlockId === block.id}
+                isDragging={draggingBlockId === block.id}
+                globalDisplayMode={globalDisplayMode}
+                onSelect={() => onSelectBlock(block.id)}
+                onUpdate={onUpdateBlock}
+                onDelete={() => onDeleteBlock(block.id)}
+                onOpenPronunciation={onOpenPronunciation}
+                onOpenStrokeOrder={onOpenStrokeOrder}
+                onDragStart={handleDragStart}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Right Expansion Button */}
         <div
-          className="absolute inset-0 pointer-events-none opacity-30"
           style={{
-            backgroundImage: `
-              radial-gradient(circle, #ef4444 1px, transparent 1px),
-              linear-gradient(to right, #f87171 1px, transparent 1px),
-              linear-gradient(to bottom, #f87171 1px, transparent 1px)
-            `,
-            backgroundSize: '30px 30px, 120px 120px, 120px 120px',
+            position: 'absolute',
+            right: '12px',
+            top: '50%',
+            transform: 'translateY(-50%)',
           }}
-        />
-      )}
+          className="z-30 pointer-events-auto opacity-75 hover:opacity-100 transition-opacity"
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleAddSpace('horizontal', 800);
+            }}
+            title="向右擴展白板空間 (+800px)"
+            className="flex flex-col items-center gap-1 px-2 py-3 text-xs font-semibold rounded-xl shadow-md border transition-all cursor-pointer backdrop-blur-md bg-white/95 hover:bg-white text-stone-700 hover:text-indigo-600 border-stone-200 hover:border-indigo-400"
+          >
+            <ArrowRight className="w-4 h-4 text-indigo-500" />
+            <span className="text-[10px] [writing-mode:vertical-lr]">加寬空間</span>
+          </button>
+        </div>
 
-      {gridType === 'lines' && (
-        <div
-          className="absolute inset-0 pointer-events-none opacity-40"
-          style={{
-            backgroundImage: 'linear-gradient(to bottom, #cbd5e1 1px, transparent 1px)',
-            backgroundSize: '100% 48px',
-          }}
-        />
-      )}
-
-      {/* HTML5 Canvas for Freehand Drawing */}
-      <canvas
-        ref={canvasRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        className="absolute inset-0 w-full h-full z-10 cursor-crosshair"
-      />
-
-      {/* Laser pointer beacon */}
-      {laserPos && (
+        {/* Bottom Space Expansion Action Banner */}
         <div
           style={{
-            left: `${laserPos.x - 8}px`,
-            top: `${laserPos.y - 8}px`,
+            position: 'absolute',
+            bottom: '24px',
+            left: '50%',
+            transform: 'translateX(-50%)',
           }}
-          className="absolute z-40 w-4 h-4 rounded-full bg-red-600 ring-4 ring-red-400/60 shadow-[0_0_15px_#dc2626] pointer-events-none transition-transform animate-ping"
-        />
-      )}
-
-      {/* Text Blocks Layer */}
-      <div className="absolute inset-0 z-20 pointer-events-none">
-        {textBlocks.map((block) => (
-          <div key={block.id} className="pointer-events-auto">
-            <TextBlockView
-              block={block}
-              isSelected={selectedBlockId === block.id}
-              globalDisplayMode={globalDisplayMode}
-              onSelect={() => onSelectBlock(block.id)}
-              onUpdate={onUpdateBlock}
-              onDelete={() => onDeleteBlock(block.id)}
-              onOpenPronunciation={onOpenPronunciation}
-              onOpenStrokeOrder={onOpenStrokeOrder}
-              onDragStart={handleDragStart}
+          className="z-30 pointer-events-auto flex flex-col items-center justify-center gap-1.5"
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleAddSpace('vertical', 800);
+            }}
+            className="flex items-center gap-2.5 px-6 py-3 font-semibold rounded-2xl shadow-md hover:shadow-lg border-2 border-dashed transition-all hover:scale-[1.02] active:scale-95 group cursor-pointer backdrop-blur-md bg-white/95 hover:bg-white text-stone-700 hover:text-indigo-600 border-stone-300 hover:border-indigo-400"
+          >
+            <Plus
+              className="w-5 h-5 group-hover:rotate-90 transition-transform text-indigo-500"
             />
-          </div>
-        ))}
+            <span className="text-sm">增加下方空間 (+800px) — 繼續打字或使用畫筆書寫</span>
+          </button>
+          <span className="text-[11px] select-none text-stone-400">
+            雙擊白板任意位置即可直接打字輸入
+          </span>
+        </div>
       </div>
     </div>
   );
