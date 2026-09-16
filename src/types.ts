@@ -58,7 +58,7 @@ export interface DrawingPoint {
 export interface DrawingStroke {
   id: string;
   type: 'stroke';
-  tool: 'pen' | 'highlighter' | 'laser';
+  tool: 'pen' | 'highlighter' | 'laser' | 'eraser';
   points: DrawingPoint[];
   color: string;
   width: number;

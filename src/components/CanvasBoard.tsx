@@ -172,8 +172,17 @@ export const CanvasBoard: React.FC<CanvasBoardProps> = ({
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.lineWidth = stroke.width;
-      ctx.strokeStyle = stroke.color;
-      ctx.globalAlpha = stroke.opacity;
+
+      if (stroke.tool === 'eraser' || stroke.color === '#fbfbfa' || stroke.color === 'transparent') {
+        // Subtractive eraser: uses destination-out to restore canvas pixels to transparent,
+        // ensuring background grid lines (Tianzige, Mizige, etc.) are never covered or removed
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.strokeStyle = 'rgba(0, 0, 0, 1)';
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = stroke.color;
+        ctx.globalAlpha = stroke.opacity;
+      }
 
       const pts = stroke.points;
       ctx.moveTo(pts[0].x, pts[0].y);
@@ -423,6 +432,22 @@ export const CanvasBoard: React.FC<CanvasBoardProps> = ({
     isDrawingRef.current = true;
     const pt = getCanvasCoords(e.clientX, e.clientY);
     currentPointsRef.current = [pt];
+
+    if (tool === 'eraser') {
+      // Immediate tap erase for responsive visual feedback without affecting background grid
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'destination-out';
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, (strokeWidth * 3) / 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -450,9 +475,19 @@ export const CanvasBoard: React.FC<CanvasBoardProps> = ({
       ctx.beginPath();
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.lineWidth = tool === 'eraser' ? strokeWidth * 3 : strokeWidth;
-      ctx.strokeStyle = tool === 'eraser' ? '#fbfbfa' : color;
-      ctx.globalAlpha = tool === 'highlighter' ? 0.35 : 1.0;
+
+      if (tool === 'eraser') {
+        // True subtractive eraser: clears stroke pixels back to transparent,
+        // so the background grid lines (Tianzige, Mizige, etc.) underneath remain untouched!
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.lineWidth = strokeWidth * 3;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 1)';
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.lineWidth = strokeWidth;
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = tool === 'highlighter' ? 0.35 : 1.0;
+      }
 
       const p1 = pts[pts.length - 2];
       const p2 = pts[pts.length - 1];
@@ -478,14 +513,23 @@ export const CanvasBoard: React.FC<CanvasBoardProps> = ({
     setIsDrawing(false);
     isDrawingRef.current = false;
 
+    // Support single tap dots as valid strokes
+    if (currentPointsRef.current.length === 1) {
+      currentPointsRef.current.push({
+        x: currentPointsRef.current[0].x + 0.1,
+        y: currentPointsRef.current[0].y + 0.1,
+      });
+    }
+
     if (currentPointsRef.current.length >= 2) {
+      const isEraser = tool === 'eraser';
       const newStroke: DrawingStroke = {
         id: `stroke_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         type: 'stroke',
-        tool: tool === 'highlighter' ? 'highlighter' : 'pen',
+        tool: isEraser ? 'eraser' : (tool === 'highlighter' ? 'highlighter' : 'pen'),
         points: [...currentPointsRef.current],
-        color: tool === 'eraser' ? '#fbfbfa' : color,
-        width: tool === 'eraser' ? strokeWidth * 3 : strokeWidth,
+        color: isEraser ? 'transparent' : color,
+        width: isEraser ? strokeWidth * 3 : strokeWidth,
         opacity: tool === 'highlighter' ? 0.35 : 1.0,
       };
       onAddStroke(newStroke);
@@ -856,6 +900,8 @@ export const CanvasBoard: React.FC<CanvasBoardProps> = ({
                   : 'cursor-grab'
                 : tool === 'select'
                 ? 'cursor-default'
+                : tool === 'eraser'
+                ? 'cursor-cell'
                 : 'cursor-crosshair'
             }`}
           />
