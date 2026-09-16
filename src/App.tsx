@@ -366,6 +366,9 @@ export function App() {
         case 'v':
           setCurrentTool('select');
           break;
+        case 'm':
+          setCurrentTool('hand');
+          break;
         case 'p':
           setCurrentTool('pen');
           break;

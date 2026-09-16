@@ -2,7 +2,7 @@ export type ScriptType = 'traditional' | 'simplified';
 export type RegionalStandard = 'taiwan' | 'mainland';
 export type PhoneticDisplayMode = 'both' | 'zhuyin' | 'pinyin' | 'none';
 export type BackgroundGridType = 'tianzige' | 'mizige' | 'lines' | 'dots' | 'blank';
-export type ToolType = 'select' | 'pen' | 'highlighter' | 'eraser' | 'laser' | 'text';
+export type ToolType = 'select' | 'hand' | 'pen' | 'highlighter' | 'eraser' | 'laser' | 'text';
 
 export type FontFamilyOption = 
   | 'kaishu'      // 標楷體 (Standard KaiTi)

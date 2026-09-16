@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   MousePointer,
+  Hand,
   PenTool,
   Highlighter,
   Type,
@@ -82,6 +83,18 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           }`}
         >
           <MousePointer className="w-4 h-4" />
+        </button>
+
+        <button
+          onClick={() => onSelectTool('hand')}
+          title="抓手/移動白板畫面 (M 或空白鍵)"
+          className={`p-2 rounded-lg transition-colors ${
+            currentTool === 'hand'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-stone-300 hover:text-white hover:bg-stone-700/60'
+          }`}
+        >
+          <Hand className="w-4 h-4" />
         </button>
 
         <button

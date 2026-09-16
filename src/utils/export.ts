@@ -73,14 +73,30 @@ export async function copyRubyHtmlToClipboard(blocks: TextBlockItem[], displayMo
   }
 }
 
-// Copy canvas image directly to clipboard as PNG
-export async function copyCanvasImageToClipboard(element: HTMLElement): Promise<boolean> {
+// Helper to capture whiteboard element with 100% resolution even when zoomed/transformed
+async function renderCleanElementCanvas(element: HTMLElement): Promise<HTMLCanvasElement> {
+  const stage = element.parentElement;
+  const originalTransform = stage ? stage.style.transform : '';
+  if (stage) {
+    stage.style.transform = 'none';
+  }
   try {
-    const canvas = await html2canvas(element, {
+    return await html2canvas(element, {
       scale: 2,
       useCORS: true,
       backgroundColor: '#fbfbfa',
     });
+  } finally {
+    if (stage) {
+      stage.style.transform = originalTransform;
+    }
+  }
+}
+
+// Copy canvas image directly to clipboard as PNG
+export async function copyCanvasImageToClipboard(element: HTMLElement): Promise<boolean> {
+  try {
+    const canvas = await renderCleanElementCanvas(element);
     return new Promise((resolve) => {
       canvas.toBlob(async (blob) => {
         if (!blob) {
@@ -182,11 +198,7 @@ export async function exportToPng(
   element: HTMLElement,
   filename: string = '華語教學白板'
 ): Promise<void> {
-  const canvas = await html2canvas(element, {
-    scale: 2,
-    useCORS: true,
-    backgroundColor: '#fbfbfa',
-  });
+  const canvas = await renderCleanElementCanvas(element);
   const dataUrl = canvas.toDataURL('image/png');
   const link = document.createElement('a');
   link.href = dataUrl;
@@ -201,11 +213,7 @@ export async function exportToPdf(
   element: HTMLElement,
   title: string = '華語教學白板課堂筆記'
 ): Promise<void> {
-  const canvas = await html2canvas(element, {
-    scale: 2,
-    useCORS: true,
-    backgroundColor: '#fbfbfa',
-  });
+  const canvas = await renderCleanElementCanvas(element);
 
   const imgData = canvas.toDataURL('image/png');
   const pdf = new jsPDF({
