@@ -334,37 +334,97 @@ export const TextBlockView: React.FC<TextBlockViewProps> = ({
                   </span>
 
                   {/* Right-side Vertical Taiwanese Zhuyin (注音) Layout */}
-                  {showZhuyin && (
-                    <div
-                      style={{
-                        fontSize: `${Math.max(10, Math.round(block.fontSize * 0.28))}px`,
-                        height: `${block.fontSize}px`,
-                      }}
-                      className="flex items-center pl-1 font-mono text-stone-700 leading-none select-none"
-                    >
-                      {/* Bopomofo stem (Vertical) */}
-                      <div className="flex flex-col justify-around h-full font-bold">
-                        {Array.from(ch.zhuyin).map((b, bIdx) => (
-                          <span key={bIdx} className="leading-none text-center">
-                            {b}
-                          </span>
-                        ))}
-                      </div>
+                  {showZhuyin && (() => {
+                    const rawZhuyin = ch.zhuyin || '';
+                    let effectiveTone = ch.zhuyinTone || '';
+                    if (!effectiveTone) {
+                      if (rawZhuyin.includes('˙')) effectiveTone = '˙';
+                      else if (rawZhuyin.includes('ˊ')) effectiveTone = 'ˊ';
+                      else if (rawZhuyin.includes('ˇ')) effectiveTone = 'ˇ';
+                      else if (rawZhuyin.includes('ˋ')) effectiveTone = 'ˋ';
+                    }
+                    const isNeutralTone = effectiveTone === '˙' || rawZhuyin.includes('˙');
+                    const cleanZhuyin = rawZhuyin.replace(/[˙ˊˇˋ]/g, '');
+                    const zhuyinLetters = Array.from(cleanZhuyin);
+                    const zhuyinFontSize = Math.max(11, Math.round(block.fontSize * 0.28));
+                    const toneFontSize = Math.max(10, Math.round(zhuyinFontSize * 0.95));
 
-                      {/* Tone symbol (Right side or top for neutral) */}
-                      {ch.zhuyinTone && (
-                        <span
-                          className={`font-black ml-0.5 ${
-                            ch.zhuyinTone === '˙'
-                              ? 'self-start text-[11px] text-amber-700'
-                              : 'self-center text-amber-800'
-                          }`}
-                        >
-                          {ch.zhuyinTone}
-                        </span>
-                      )}
-                    </div>
-                  )}
+                    return (
+                      <div
+                        style={{
+                          fontSize: `${zhuyinFontSize}px`,
+                          minHeight: `${block.fontSize}px`,
+                          fontFamily: '"DFKai-SB", "BiauKai", "KaiTi", "Noto Sans TC", "Microsoft JhengHei", sans-serif',
+                        }}
+                        className="flex flex-col justify-center items-center pl-1 text-stone-800 leading-none select-none shrink-0"
+                      >
+                        {/* 輕聲 (五聲)：依標準規範置於聲母（第一個注音符號）的正上方 */}
+                        {isNeutralTone && (
+                          <div
+                            className="flex items-center justify-center select-none"
+                            style={{
+                              height: `${Math.max(6, Math.round(zhuyinFontSize * 0.5))}px`,
+                              marginBottom: `${Math.max(1, Math.round(zhuyinFontSize * 0.1))}px`,
+                            }}
+                            title="輕聲"
+                          >
+                            <span
+                              className="rounded-full bg-amber-800 shrink-0"
+                              style={{
+                                width: `${Math.max(4, Math.round(zhuyinFontSize * 0.32))}px`,
+                                height: `${Math.max(4, Math.round(zhuyinFontSize * 0.32))}px`,
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        {/* 注音符號直排與側邊聲調符號 */}
+                        <div className="flex items-center justify-center">
+                          <div className="flex flex-col items-center justify-around font-bold leading-tight">
+                            {zhuyinLetters.map((b, bIdx) => {
+                              const isLast = bIdx === zhuyinLetters.length - 1;
+                              const hasSideTone = isLast && !isNeutralTone && Boolean(effectiveTone);
+
+                              return (
+                                <div
+                                  key={bIdx}
+                                  className="relative flex items-center justify-center leading-none"
+                                >
+                                  <span className="leading-none text-center">
+                                    {b}
+                                  </span>
+
+                                  {/* 二聲、三聲、四聲：置於最後一個注音符號（韻母）右邊偏上位置 */}
+                                  {hasSideTone && (
+                                    <span
+                                      className="absolute left-full top-0 ml-0.5 font-bold text-amber-800 select-none pointer-events-none"
+                                      style={{
+                                        fontSize: `${toneFontSize}px`,
+                                        lineHeight: 1,
+                                        transform: 'translateY(-20%)',
+                                        fontFamily: '"DFKai-SB", "BiauKai", "KaiTi", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif',
+                                      }}
+                                      title={`${effectiveTone} 聲調`}
+                                    >
+                                      {effectiveTone}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* 留出側邊聲調寬度，避免與下一個中文字重疊 */}
+                          {!isNeutralTone && effectiveTone && (
+                            <span
+                              className="inline-block pointer-events-none"
+                              style={{ width: `${Math.max(6, Math.round(toneFontSize * 0.6))}px` }}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Quick Stroke Order Button on Hover */}

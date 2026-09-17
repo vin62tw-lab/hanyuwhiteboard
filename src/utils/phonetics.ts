@@ -1,4 +1,4 @@
-import { pinyin } from 'pinyin-pro';
+import { pinyin, convert } from 'pinyin-pro';
 import { CharacterPhonetic, RegionalStandard, ScriptType } from '../types';
 
 // Taiwan MOE standard vs Mainland difference mappings
@@ -374,6 +374,21 @@ export function toneNumberToZhuyinTone(tone: number): string {
     case 5: return '˙';
     default: return '';
   }
+}
+
+// Change pinyin string tone mark to the requested tone number (1..5, where 5 is neutral tone)
+export function changePinyinTone(pinyinStr: string, toneNum: number): string {
+  if (!pinyinStr) return '';
+  const cleanPy = pinyinStr.trim();
+  const baseNone = convert(cleanPy, { format: 'toneNone' }).replace(/[0-9]/g, '');
+  if (toneNum === 5 || toneNum === 0) {
+    return baseNone;
+  }
+  if (toneNum >= 1 && toneNum <= 4) {
+    const res = convert(`${baseNone}${toneNum}`, { format: 'numToSymbol' });
+    return res || cleanPy;
+  }
+  return cleanPy;
 }
 
 // Process a single Chinese character with Taiwan/Mainland and Script awareness

@@ -129,18 +129,58 @@ export const TextInputDialog: React.FC<TextInputDialogProps> = ({
                       >
                         {item.char}
                       </span>
-                      {item.zhuyin && (
-                        <div className="text-[10px] font-mono text-stone-600 flex items-center pl-0.5">
-                          <span className="flex flex-col text-[9px] leading-none">
-                            {Array.from(item.zhuyin).map((z, zIdx) => (
-                              <span key={zIdx}>{z}</span>
-                            ))}
-                          </span>
-                          <span className="text-amber-800 text-[10px] ml-0.5 font-bold">
-                            {item.zhuyinTone}
-                          </span>
-                        </div>
-                      )}
+                      {item.zhuyin && (() => {
+                        const rawZy = item.zhuyin || '';
+                        let tone = item.zhuyinTone || '';
+                        if (!tone) {
+                          if (rawZy.includes('˙')) tone = '˙';
+                          else if (rawZy.includes('ˊ')) tone = 'ˊ';
+                          else if (rawZy.includes('ˇ')) tone = 'ˇ';
+                          else if (rawZy.includes('ˋ')) tone = 'ˋ';
+                        }
+                        const isNeutral = tone === '˙' || rawZy.includes('˙');
+                        const cleanZy = rawZy.replace(/[˙ˊˇˋ]/g, '');
+                        const letters = Array.from(cleanZy);
+
+                        return (
+                          <div
+                            style={{
+                              fontFamily: '"DFKai-SB", "BiauKai", "KaiTi", "Noto Sans TC", "Microsoft JhengHei", sans-serif',
+                            }}
+                            className="text-stone-700 flex flex-col items-center justify-center pl-1 select-none leading-none"
+                          >
+                            {/* 輕聲圓點在聲母正上方 */}
+                            {isNeutral && (
+                              <div className="flex items-center justify-center mb-0.5" title="輕聲">
+                                <span className="w-1 h-1 rounded-full bg-amber-800 shrink-0" />
+                              </div>
+                            )}
+
+                            <div className="flex items-center">
+                              <div className="flex flex-col text-[10px] leading-tight font-bold">
+                                {letters.map((z, zIdx) => {
+                                  const isLast = zIdx === letters.length - 1;
+                                  const showSideTone = isLast && !isNeutral && Boolean(tone);
+                                  return (
+                                    <div key={zIdx} className="relative flex items-center justify-center">
+                                      <span>{z}</span>
+                                      {showSideTone && (
+                                        <span
+                                          className="absolute left-full top-0 ml-0.5 text-amber-800 text-[10px] font-bold select-none"
+                                          style={{ transform: 'translateY(-20%)' }}
+                                        >
+                                          {tone}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {!isNeutral && tone && <span className="inline-block w-2" />}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))}

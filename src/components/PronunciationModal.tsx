@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { X, Volume2, Check, RotateCcw, Edit3 } from 'lucide-react';
 import { CharacterPhonetic, RegionalStandard } from '../types';
-import { REGIONAL_DIFFERENCES, toneNumberToZhuyinTone } from '../utils/phonetics';
+import {
+  REGIONAL_DIFFERENCES,
+  toneNumberToZhuyinTone,
+  changePinyinTone,
+  getToneNumber,
+} from '../utils/phonetics';
 
 interface PronunciationModalProps {
   charData: CharacterPhonetic;
@@ -36,6 +41,9 @@ export const PronunciationModal: React.FC<PronunciationModalProps> = ({
 
   const handleSelectPolyphone = (poly: { pinyin: string; zhuyin: string }) => {
     setPinyin(poly.pinyin);
+    const toneNum = getToneNumber(poly.pinyin);
+    setPinyinTone(toneNum);
+
     // parse zhuyin tone
     let base = poly.zhuyin;
     let tone = '';
@@ -53,21 +61,48 @@ export const PronunciationModal: React.FC<PronunciationModalProps> = ({
       base = poly.zhuyin.replace('ˋ', '');
     }
     setZhuyin(base);
-    setZhuyinTone(tone);
+    setZhuyinTone(tone || toneNumberToZhuyinTone(toneNum));
   };
 
+  // 選擇聲調：同時自動修改注音聲調與拼音聲調
   const handleSetTone = (toneNum: number) => {
     setPinyinTone(toneNum);
     setZhuyinTone(toneNumberToZhuyinTone(toneNum));
+
+    // 同步自動修改拼音的調號
+    if (pinyin) {
+      const updatedPinyin = changePinyinTone(pinyin, toneNum);
+      if (updatedPinyin) {
+        setPinyin(updatedPinyin);
+      }
+    }
   };
 
   const handleSave = () => {
+    let finalZhuyin = zhuyin.trim();
+    let finalZhuyinTone = zhuyinTone;
+    if (finalZhuyin.includes('˙')) {
+      finalZhuyinTone = '˙';
+      finalZhuyin = finalZhuyin.replace(/˙/g, '');
+    } else if (finalZhuyin.includes('ˊ')) {
+      finalZhuyinTone = 'ˊ';
+      finalZhuyin = finalZhuyin.replace(/ˊ/g, '');
+    } else if (finalZhuyin.includes('ˇ')) {
+      finalZhuyinTone = 'ˇ';
+      finalZhuyin = finalZhuyin.replace(/ˇ/g, '');
+    } else if (finalZhuyin.includes('ˋ')) {
+      finalZhuyinTone = 'ˋ';
+      finalZhuyin = finalZhuyin.replace(/ˋ/g, '');
+    }
+
+    const finalToneNum = pinyinTone || getToneNumber(pinyin);
+
     onSave({
       ...charData,
       pinyin,
-      zhuyin,
-      zhuyinTone,
-      pinyinTone,
+      zhuyin: finalZhuyin,
+      zhuyinTone: finalZhuyinTone,
+      pinyinTone: finalToneNum,
       customOverridden: true,
     });
     onClose();
@@ -181,7 +216,7 @@ export const PronunciationModal: React.FC<PronunciationModalProps> = ({
             <label className="text-xs font-semibold text-stone-600">選擇聲調：</label>
             <div className="grid grid-cols-5 gap-1.5">
               {[
-                { num: 1, label: '一聲 (陰平)', mark: '無調號' },
+                { num: 1, label: '一聲 (陰平)', mark: '—' },
                 { num: 2, label: '二聲 (陽平)', mark: 'ˊ' },
                 { num: 3, label: '三聲 (上聲)', mark: 'ˇ' },
                 { num: 4, label: '四聲 (去聲)', mark: 'ˋ' },
@@ -190,14 +225,21 @@ export const PronunciationModal: React.FC<PronunciationModalProps> = ({
                 <button
                   key={t.num}
                   onClick={() => handleSetTone(t.num)}
-                  className={`py-1.5 px-2 rounded-lg border text-center transition-all ${
+                  className={`py-2 px-1.5 rounded-lg border text-center transition-all ${
                     pinyinTone === t.num || (zhuyinTone === '' && t.num === 1) || (zhuyinTone === t.mark)
-                      ? 'bg-amber-600 text-white border-amber-600 font-bold'
+                      ? 'bg-amber-600 text-white border-amber-600 font-bold shadow-xs'
                       : 'border-stone-200 text-stone-700 hover:bg-stone-100 text-xs'
                   }`}
                 >
                   <div className="text-xs font-bold">{t.num} 聲</div>
-                  <div className="text-[10px] opacity-80">{t.mark}</div>
+                  <div
+                    className="text-base font-black leading-none mt-1"
+                    style={{
+                      fontFamily: '"DFKai-SB", "BiauKai", "KaiTi", "Noto Sans TC", sans-serif',
+                    }}
+                  >
+                    {t.mark}
+                  </div>
                 </button>
               ))}
             </div>
@@ -210,7 +252,15 @@ export const PronunciationModal: React.FC<PronunciationModalProps> = ({
               <input
                 type="text"
                 value={pinyin}
-                onChange={(e) => setPinyin(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPinyin(val);
+                  const detectedTone = getToneNumber(val);
+                  if (detectedTone >= 1 && detectedTone <= 5) {
+                    setPinyinTone(detectedTone);
+                    setZhuyinTone(toneNumberToZhuyinTone(detectedTone));
+                  }
+                }}
                 className="w-full px-2.5 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-hidden font-mono"
                 placeholder="例如: zhōng"
               />
@@ -220,7 +270,25 @@ export const PronunciationModal: React.FC<PronunciationModalProps> = ({
               <input
                 type="text"
                 value={zhuyin}
-                onChange={(e) => setZhuyin(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  let toneSym = '';
+                  let base = val;
+                  if (val.includes('˙')) { toneSym = '˙'; base = val.replace(/˙/g, ''); }
+                  else if (val.includes('ˊ')) { toneSym = 'ˊ'; base = val.replace(/ˊ/g, ''); }
+                  else if (val.includes('ˇ')) { toneSym = 'ˇ'; base = val.replace(/ˇ/g, ''); }
+                  else if (val.includes('ˋ')) { toneSym = 'ˋ'; base = val.replace(/ˋ/g, ''); }
+                  setZhuyin(base);
+                  if (toneSym) {
+                    setZhuyinTone(toneSym);
+                    const toneMap: Record<string, number> = { 'ˊ': 2, 'ˇ': 3, 'ˋ': 4, '˙': 5 };
+                    const tn = toneMap[toneSym] || 1;
+                    setPinyinTone(tn);
+                    if (pinyin) {
+                      setPinyin(changePinyinTone(pinyin, tn));
+                    }
+                  }
+                }}
                 className="w-full px-2.5 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-hidden font-mono"
                 placeholder="例如: ㄓㄨㄥ"
               />
