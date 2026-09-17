@@ -495,7 +495,7 @@ export function App() {
         />
       )}
 
-      {/* Export to Word / Google Docs / PDF / PNG / GIF Modal */}
+      {/* Export to PDF / PNG Modal */}
       {isExportOpen && (
         <ExportModal
           textBlocks={textBlocks}

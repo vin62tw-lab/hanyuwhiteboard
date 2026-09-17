@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Play, Pause, RotateCcw, ChevronLeft, ChevronRight, Download, Sparkles, BookOpen } from 'lucide-react';
+import { X, Play, Pause, RotateCcw, ChevronLeft, ChevronRight, Sparkles, BookOpen } from 'lucide-react';
 import { getGenericStrokeData, STROKE_LIBRARY, StrokePathData } from '../utils/strokeData';
-import { exportToGif } from '../utils/export';
 
 interface StrokeOrderModalProps {
   initialChar?: string;
@@ -101,57 +100,6 @@ export const StrokeOrderModal: React.FC<StrokeOrderModalProps> = ({
   const handleReset = () => {
     setIsPlaying(false);
     setCurrentStep(0);
-  };
-
-  const handleDownloadGif = async () => {
-    if (!svgRef.current) return;
-    try {
-      const canvases: HTMLCanvasElement[] = [];
-      const totalSteps = strokeData.steps.length;
-
-      for (let s = 1; s <= totalSteps; s++) {
-        const c = document.createElement('canvas');
-        c.width = 360;
-        c.height = 360;
-        const ctx = c.getContext('2d');
-        if (!ctx) continue;
-
-        // Background
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, 360, 360);
-
-        // Tianzige lines
-        ctx.strokeStyle = '#fca5a5';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(10, 10, 340, 340);
-        ctx.setLineDash([6, 6]);
-        ctx.beginPath();
-        ctx.moveTo(180, 10);
-        ctx.lineTo(180, 350);
-        ctx.moveTo(10, 180);
-        ctx.lineTo(350, 180);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Character text rendering
-        ctx.font = '220px "DFKai-SB", "BiauKai", "KaiTi", serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#1e293b';
-        ctx.fillText(char, 180, 190);
-
-        // Badge
-        ctx.fillStyle = '#dc2626';
-        ctx.font = 'bold 16px sans-serif';
-        ctx.fillText(`第 ${s}/${totalSteps} 筆`, 50, 30);
-
-        canvases.push(c);
-      }
-
-      exportToGif(canvases, Math.round(500 / speed), `字「${char}」筆順動畫`);
-    } catch (err) {
-      console.error('Failed to export GIF:', err);
-    }
   };
 
   const activeStepInfo = strokeData.steps[currentStep - 1];
@@ -355,15 +303,8 @@ export const StrokeOrderModal: React.FC<StrokeOrderModalProps> = ({
               )}
             </div>
 
-            {/* Footer action: Download GIF */}
-            <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between">
-              <button
-                onClick={handleDownloadGif}
-                className="flex items-center gap-1.5 text-xs text-stone-600 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg border border-stone-200 transition-colors"
-              >
-                <Download className="w-3.5 h-3.5" />
-                下載筆順 GIF 動畫
-              </button>
+            {/* Footer action */}
+            <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-end">
               <button
                 onClick={onClose}
                 className="px-4 py-1.5 text-xs bg-stone-800 hover:bg-stone-900 text-white font-medium rounded-lg transition-colors"

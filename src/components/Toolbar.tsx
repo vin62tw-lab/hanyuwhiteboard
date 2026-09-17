@@ -280,7 +280,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         <button
           onClick={onOpenExportModal}
           className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition-colors shadow-xs whitespace-nowrap"
-          title="匯出至 Word / Google Docs / PDF / PNG / GIF"
+          title="匯出至 PDF / PNG / 複製內容"
         >
           <Download className="w-3.5 h-3.5" />
           <span>匯出</span>

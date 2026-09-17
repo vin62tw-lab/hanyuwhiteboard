@@ -5,22 +5,15 @@ import {
   FileText,
   FileDown,
   Image as ImageIcon,
-  Film,
   Check,
-  ExternalLink,
-  BookOpen,
-  FileSpreadsheet
 } from 'lucide-react';
 import { TextBlockItem, PhoneticDisplayMode } from '../types';
 import {
   copyPlainText,
   copyRubyHtmlToClipboard,
   copyCanvasImageToClipboard,
-  exportToWordDoc,
-  exportToGoogleDocsDoc,
   exportToPdf,
   exportToPng,
-  exportToGif,
 } from '../utils/export';
 
 interface ExportModalProps {
@@ -63,16 +56,6 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     if (success) showCopySuccess('image');
   };
 
-  const handleExportGoogleDocs = () => {
-    exportToGoogleDocsDoc(textBlocks, displayMode);
-    showCopySuccess('gdocs');
-  };
-
-  const handleExportWord = () => {
-    exportToWordDoc(textBlocks, displayMode, docTitle);
-    showCopySuccess('word');
-  };
-
   const handleExportPdf = async () => {
     if (!boardElementRef.current) return;
     setExporting(true);
@@ -89,41 +72,6 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     showCopySuccess('png');
   };
 
-  const handleExportGif = () => {
-    // Generate a simple 3-frame presentation GIF of the board
-    if (!boardElementRef.current) return;
-    setExporting(true);
-    const canvas = document.createElement('canvas');
-    canvas.width = 600;
-    canvas.height = 400;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      const canvases: HTMLCanvasElement[] = [];
-      const colors = ['#f8fafc', '#ffffff', '#f1f5f9'];
-      for (let i = 0; i < 3; i++) {
-        const c = document.createElement('canvas');
-        c.width = 600;
-        c.height = 400;
-        const cCtx = c.getContext('2d');
-        if (cCtx) {
-          cCtx.fillStyle = colors[i];
-          cCtx.fillRect(0, 0, 600, 400);
-          cCtx.font = '24px "DFKai-SB", "BiauKai", serif';
-          cCtx.fillStyle = '#1e293b';
-          cCtx.fillText(docTitle, 30, 50);
-          textBlocks.forEach((tb, bIdx) => {
-            cCtx.font = `${Math.min(32, tb.fontSize)}px "DFKai-SB", serif`;
-            cCtx.fillText(tb.rawText, 40, 100 + bIdx * 60);
-          });
-          canvases.push(c);
-        }
-      }
-      exportToGif(canvases, 400, `${docTitle}_動畫板書`);
-    }
-    setExporting(false);
-    showCopySuccess('gif');
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-fade-in">
       <div className="bg-white rounded-2xl shadow-2xl border border-stone-200 w-full max-w-xl overflow-hidden flex flex-col">
@@ -135,7 +83,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-stone-800 text-lg">白板內容複製與多格式匯出</h3>
-              <p className="text-xs text-stone-500">支援 Google Docs、Word、PDF、PNG 與 GIF 動畫圖檔</p>
+              <p className="text-xs text-stone-500">支援 PDF 講義與 PNG 圖檔匯出，以及剪貼簿快速複製</p>
             </div>
           </div>
           <button
@@ -214,41 +162,6 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               輸出為檔案格式
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Google Docs */}
-              <button
-                onClick={handleExportGoogleDocs}
-                className="flex items-start gap-3 p-3.5 rounded-xl border border-stone-200 hover:border-blue-500 hover:bg-blue-50/40 text-left transition-all group"
-              >
-                <div className="p-2.5 bg-blue-100 text-blue-700 rounded-xl group-hover:scale-105 transition-transform">
-                  <FileSpreadsheet className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-bold text-stone-800 text-sm flex items-center gap-1">
-                    Google Docs 格式
-                    <ExternalLink className="w-3 h-3 text-stone-400" />
-                  </div>
-                  <p className="text-xs text-stone-500 mt-0.5">
-                    產生相容 Google Docs 雲端匯入與貼上之標準標音文檔
-                  </p>
-                </div>
-              </button>
-
-              {/* Microsoft Word */}
-              <button
-                onClick={handleExportWord}
-                className="flex items-start gap-3 p-3.5 rounded-xl border border-stone-200 hover:border-blue-700 hover:bg-blue-50/40 text-left transition-all group"
-              >
-                <div className="p-2.5 bg-blue-600 text-white rounded-xl group-hover:scale-105 transition-transform">
-                  <BookOpen className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-bold text-stone-800 text-sm">Microsoft Word (.doc)</div>
-                  <p className="text-xs text-stone-500 mt-0.5">
-                    保留完整注音/拼音旁注標記，可於 Word 中直接編輯
-                  </p>
-                </div>
-              </button>
-
               {/* PDF Handout */}
               <button
                 onClick={handleExportPdf}
@@ -261,7 +174,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 <div>
                   <div className="font-bold text-stone-800 text-sm">PDF 課堂教材講義</div>
                   <p className="text-xs text-stone-500 mt-0.5">
-                    高解析度 A4 向量格式，適合列印作業與學習單
+                    高解析度 A4 格式，適合列印作業與學習單
                   </p>
                 </div>
               </button>
@@ -279,23 +192,6 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   <div className="font-bold text-stone-800 text-sm">高解析度 PNG 圖檔</div>
                   <p className="text-xs text-stone-500 mt-0.5">
                     清晰保存白板上的手寫劃線、田字格與打字筆記
-                  </p>
-                </div>
-              </button>
-
-              {/* GIF Animation */}
-              <button
-                onClick={handleExportGif}
-                disabled={exporting}
-                className="flex items-start gap-3 p-3.5 rounded-xl border border-stone-200 hover:border-purple-500 hover:bg-purple-50/40 text-left transition-all group sm:col-span-2"
-              >
-                <div className="p-2.5 bg-purple-100 text-purple-700 rounded-xl group-hover:scale-105 transition-transform">
-                  <Film className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-bold text-stone-800 text-sm">GIF 動畫圖檔</div>
-                  <p className="text-xs text-stone-500 mt-0.5">
-                    輸出動態播放圖檔，可用於展示筆順過程或課堂複習動態
                   </p>
                 </div>
               </button>
